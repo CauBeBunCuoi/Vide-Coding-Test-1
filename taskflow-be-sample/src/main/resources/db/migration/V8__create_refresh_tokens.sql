@@ -1,0 +1,7 @@
+CREATE TABLE refresh_tokens (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMP   NOT NULL,
+    created_at TIMESTAMP   NOT NULL DEFAULT NOW()
+);
