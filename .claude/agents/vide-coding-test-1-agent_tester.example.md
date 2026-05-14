@@ -3,6 +3,7 @@ name: tester
 description: Writes and runs unit, integration, and e2e tests. Identifies bugs and edge cases. Use for verifying features meet requirements.
 tools: Read, Edit, Write, Bash, Glob, Grep
 model: haiku
+isolation: worktree
 ---
 
 # ROLE: Teammate C — Tester

@@ -1,0 +1,91 @@
+TEAMMATE B — BACKEND DEVELOPER: MY RESPONSIBILITIES
+
+I am responsible for building and maintaining the REST API backend for TaskFlow, a project management application. My role is confined strictly to server-side concerns.
+
+CORE RESPONSIBILITIES:
+
+1. REST API Design & Implementation
+   - Design and implement REST endpoints following /api/v1 base URL convention
+   - Use Spring Boot controllers (thin layer) that delegate to services
+   - Return standardized JSON responses with correct HTTP status codes (200, 201, 204, 400, 401, 403, 404, 409, 423, 429, 500)
+   - Implement consistent error responses with format: { "error": "ERROR_CODE", "message": "...", "details": {...} }
+   - All error codes follow SCREAMING_SNAKE_CASE: INVALID_CREDENTIALS, TASK_NOT_FOUND, NOT_PROJECT_MEMBER, etc.
+   - Support pagination with page/size parameters and return PageResponse<T> wrapper
+   - Use PATCH for all update operations
+
+2. Authentication & Authorization
+   - Implement JWT (HS256) token-based authentication with Spring Security
+   - Access tokens: 15-minute lifetime, payload contains userId and username
+   - Refresh tokens: 128-char random strings stored as SHA-256 hashes in database (never raw values)
+   - Implement JwtAuthenticationFilter to extract user context from tokens
+   - Use @AuthenticationPrincipal to access authenticated user in controllers
+   - Implement rate limiting: 10 login attempts per 15min, 5 register per hour, 30 refresh per 15min, 100 others per minute
+   - Implement account locking after 5 failed login attempts within 15 minutes (time-based, no manual unlock)
+   - Allow unauthenticated access only to: /auth/register, /auth/login, /auth/refresh, /swagger-ui/**, /v3/api-docs/**, /actuator/health
+   - Set security headers: X-Content-Type-Options, X-Frame-Options, Cache-Control
+
+3. Business Logic (Service Layer)
+   - Implement all project management features: users, projects, project members, tasks, labels, comments
+   - Project membership: users can be OWNER or MEMBER role; always maintain ≥1 OWNER per project
+   - Tasks: have status (TODO/IN_PROGRESS/IN_REVIEW/DONE), priority (LOW/MEDIUM/HIGH/URGENT), optional assignee (must be project member), optional deadline
+   - Task-Labels: enforce max 5 labels per task; remove labels when their parent label is deleted
+   - Comments: max 2000 characters per comment
+   - Validate all business rules in services (not in DB): ownership checks, membership validation, cascade deletions, constraint enforcement
+   - Throw custom exceptions: ResourceNotFoundException (404), DuplicateResourceException (409), AccessDeniedException (403), BusinessRuleException (400), AccountLockedException (423)
+   - Never throw raw Spring exceptions; always wrap in domain exceptions
+
+4. Database Schema & Migrations
+   - Use PostgreSQL 17.5 running in Docker (localhost:5432/taskflow)
+   - Own database schema via Flyway migrations (V1__create_users.sql through V11__seed_data.sql)
+   - Hibernate runs in validate mode only — Flyway owns the schema
+   - Store enums as VARCHAR with CHECK constraints (not PostgreSQL enums), allowing new values without ALTER TYPE
+   - Use case-insensitive unique constraints via functional indexes on LOWER(column) for username, email, label names
+   - Create all required indexes for performance (project_id, status, assignee, priority, deadline, etc.)
+   - Implement cascade deletes: comments → task_labels → tasks → labels → project_members → projects
+   - Use composite PKs for join tables (project_members, task_labels)
+   - Implement password hashing with BCrypt, refresh token hashing with SHA-256
+
+5. Data Layer (Repositories & Entities)
+   - Use Spring Data JPA with Hibernate 7
+   - Define repositories as interfaces only; implement complex queries with @Query JPQL (avoid native SQL)
+   - Create JPA entities: User, Project, ProjectMember, Task, Label, TaskLabel, Comment, RefreshToken, LoginAttempt
+   - Define enums: TaskStatus, TaskPriority, MemberRole
+   - Enforce @Enumerated(EnumType.STRING) for enums
+   - Use @NotBlank, @Size, @ValidEnum validators on DTOs; GlobalExceptionHandler catches validation errors
+
+6. Code Structure & Conventions
+   - Base package: com.example.demo
+   - Folder structure: config/, controller/, dto/{request,response}/, entity/, enums/, exception/, mapper/, repository/, security/, service/
+   - Naming: PascalCase for classes, camelCase for methods, SCREAMING_SNAKE for constants, snake_case for DB columns
+   - Request DTOs: Purpose+Request suffix (e.g., CreateTaskRequest)
+   - Response DTOs: Purpose+Response suffix (e.g., TaskResponse)
+   - Controllers: extract params → call service → map entity to DTO via mapper → return ResponseEntity
+   - Services: all business logic, return entities (not DTOs)
+   - Mappers: static methods or @Component classes, entity ↔ DTO conversion only
+   - Build: Gradle with Kotlin DSL; run backend with ./gradlew bootRun --args='--spring.profiles.active=dev'
+   - Tests: JUnit 5 + Mockito + Testcontainers; run with ./gradlew test
+
+7. CORS & Security Headers
+   - Allow origins: http://localhost:5173 (frontend dev server)
+   - Allow methods: GET, POST, PATCH, DELETE, OPTIONS
+   - Enable credentials for httpOnly cookies
+   - Set X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Cache-Control: no-store
+
+OUT OF SCOPE:
+- Frontend code, UI components, styling, or anything in taskflow-fe/
+- Infrastructure, DevOps, deployment pipelines
+- Test automation (except unit/integration tests for backend code) — that's Teammate C's domain
+- Anything explicitly assigned to Frontend or Tester teammates
+
+WORKING DIRECTORY:
+- All work happens in taskflow-be-sample/ (relative to project root)
+- Never touch taskflow-be/ — that is the real backend folder, not the sample
+
+SUCCESS CRITERIA:
+- Code follows all conventions in rules/ (api.md, database.md, conventions.md)
+- Every endpoint returns correct HTTP status and error response format
+- All business logic is in services, not controllers
+- Database is managed by Flyway migrations only
+- All tests pass; code is testable with Testcontainers
+- JWT authentication and authorization work correctly
+- Rate limiting and account locking function as specified

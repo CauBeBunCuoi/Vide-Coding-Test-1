@@ -1,120 +1,65 @@
-# Backend Conventions — TaskFlow
+# Backend Conventions
 
-## Tech Stack
-
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Language | Java | 24.0.2 |
-| Framework | Spring Boot | 4.0.5 |
-| Build | Gradle (Kotlin DSL) | 8.14+ |
-| ORM | Spring Data JPA (Hibernate 7) | — |
-| Database | PostgreSQL | 17.5 |
-| Migrations | Flyway | 11 |
-| Auth | Spring Security + JJWT | — |
-| Validation | Jakarta Validation (Hibernate Validator) | — |
-| Testing | JUnit 5 + Mockito + Testcontainers | — |
-
-Base package: `com.example.demo`
-
-## Project Structure
-
-```
-src/main/java/com/example/demo/
-├── config/          SecurityConfig, JwtConfig, WebConfig
-├── controller/      AuthController, ProjectController, TaskController, MemberController, LabelController, TaskLabelController, CommentController, UserController
-├── dto/
-│   ├── request/     CreateTaskRequest, UpdateTaskRequest, InviteMemberRequest, ...
-│   └── response/    TaskResponse, ProjectDetailResponse, PageResponse<T>, ErrorResponse, UserSummaryResponse, ...
-├── entity/          User, Project, ProjectMember, Task, Label, TaskLabel, Comment, RefreshToken, LoginAttempt
-├── enums/           TaskStatus, TaskPriority, MemberRole
-├── exception/       GlobalExceptionHandler (@RestControllerAdvice), ResourceNotFoundException, DuplicateResourceException, AccessDeniedException, AccountLockedException, BusinessRuleException
-├── mapper/          TaskMapper, ProjectMapper, LabelMapper, CommentMapper, MemberMapper, UserMapper
-├── repository/      TaskRepository, ProjectRepository, ProjectMemberRepository, LabelRepository, ...
-├── security/        JwtTokenProvider, JwtAuthenticationFilter (OncePerRequestFilter), UserPrincipal (implements UserDetails)
-└── service/         TaskService, ProjectService, MemberService, AuthService, LabelService, TaskLabelService, CommentService, UserService
-```
-
-## Naming Conventions
-
+## Naming
 | Element | Convention | Example |
 |---------|-----------|---------|
 | Classes | PascalCase | `TaskController`, `CreateTaskRequest` |
 | Methods | camelCase | `findByProjectId`, `createTask` |
 | Constants | SCREAMING_SNAKE | `MAX_LABELS_PER_TASK = 5` |
-| DB columns | snake_case | `created_at`, `project_id` |
+| Database columns | snake_case | `created_at`, `project_id` |
 | Enum values | SCREAMING_SNAKE | `IN_PROGRESS`, `HIGH` |
 | REST paths | kebab-case, plural nouns | `/api/v1/projects/{projectId}/tasks` |
 | Path variables | camelCase | `{projectId}`, `{taskId}` |
 | DTO classes | Purpose + type suffix | `CreateTaskRequest`, `TaskResponse` |
-| Service methods | verb + noun | `createTask`, `findTaskById`, `deleteTask` |
+| Service methods | verb + noun | `createTask`, `findTaskById`, `updateTask`, `deleteTask` |
 | Repository methods | Spring Data naming | `findByProjectIdAndStatus`, `existsByProjectIdAndUserId` |
-| Packages | lowercase | `com.example.demo.controller` |
 | Config properties | kebab-case | `jwt.access-token-expiration` |
 
-## Layered Architecture
+## Layer Responsibilities
+- **Controller:** extract params → call service → map to DTO → return status. No logic.
+- **Service:** all business rules, permission checks, repository calls. Returns entities.
+- **Repository:** Spring Data JPA interfaces only. Use `@Query` for non-trivial queries. Prefer JPQL over native SQL.
+- **Mapper:** static methods or `@Component` classes. One mapper per aggregate root. Converts entity → DTO.
 
-**Controllers** — thin only:
-1. Extract path vars, query params, request body
-2. Call the service method
-3. Map entity to response DTO via mapper
-4. Return `ResponseEntity` with correct HTTP status
-
-No business logic in controllers. No direct repository calls from controllers.
-
-**Services** — all business logic:
-1. Load entity → throw `ResourceNotFoundException` if missing
-2. Check membership/ownership → throw `AccessDeniedException`
-3. Validate business rules → throw `BusinessRuleException`
-4. Execute via repository
-5. Return entity (not DTO) — mapping happens in controller/mapper
-
-**Repositories** — Spring Data JPA interfaces only. Use JPQL `@Query` for complex queries. Avoid native SQL.
-
-**Mappers** — static methods or `@Component` classes. Entity → response DTO. No business logic.
-
-## Exception Hierarchy
-
-All custom exceptions extend `RuntimeException`. `GlobalExceptionHandler` maps them:
-
-| Exception | HTTP | Common codes |
-|-----------|------|-------------|
-| `BusinessRuleException` | 400 | LAST_OWNER, ASSIGNEE_NOT_MEMBER, TOO_MANY_LABELS, CONFIRMATION_MISMATCH |
-| `ResourceNotFoundException` | 404 | TASK_NOT_FOUND, PROJECT_NOT_FOUND, USER_NOT_FOUND |
-| `DuplicateResourceException` | 409 | DUPLICATE_USERNAME, DUPLICATE_EMAIL, DUPLICATE_LABEL_NAME |
-| `AccessDeniedException` | 403 | NOT_PROJECT_MEMBER, NOT_PROJECT_OWNER, NOT_TASK_OWNER |
-| `AccountLockedException` | 423 | ACCOUNT_LOCKED (includes `lockedUntil`) |
-
-Never throw raw Spring exceptions from service code — always wrap in domain exceptions.
-
-## JWT & Security Pattern
-
-- HS256, secret from `application.yml`. Access token 15 min, refresh token 7 days.
-- Refresh token stored as SHA-256 hash. Never store the raw value.
-- `JwtAuthenticationFilter` extracts `sub` (userId) from JWT → sets `UserPrincipal` on `SecurityContext`
-- Controllers access user via `@AuthenticationPrincipal UserPrincipal principal`, pass `principal.getId()` to services
-
-## Validation Pattern
-
+## Permission Check Pattern in Services
 ```java
-public record CreateTaskRequest(
-    @NotBlank(message = "Title is required")
-    @Size(max = 200, message = "Title must be at most 200 characters")
-    String title,
+// 1. Load entity (throw ResourceNotFoundException if absent)
+Task task = taskRepository.findById(taskId)
+    .orElseThrow(() -> new ResourceNotFoundException("TASK_NOT_FOUND", "Task not found"));
 
-    @ValidEnum(enumClass = TaskPriority.class)
-    String priority
-) {}
+// 2. Check project membership
+if (!projectMemberRepository.existsByProjectIdAndUserId(task.getProject().getId(), userId)) {
+    throw new AccessDeniedException("NOT_PROJECT_MEMBER", "You are not a member of this project");
+}
+
+// 3. Check action-specific permission (e.g., delete requires task creator or project owner)
+// 4. Execute operation
 ```
+`authenticatedUserId` comes from `@AuthenticationPrincipal UserPrincipal principal` in the controller, passed to service as a parameter.
 
-`GlobalExceptionHandler` catches `MethodArgumentNotValidException` → returns `ErrorResponse` with `details.fieldErrors`.
+## JWT
+- Access token: HS256, 15-min lifetime. Claims: `sub` (user ID as string), `username`, `iat`, `exp`.
+- Refresh token: 128-char cryptographically random string (`SecureRandom`). Store SHA-256 hash in DB.
+- `JwtAuthenticationFilter`: runs on every request, extracts `sub`, sets `UserPrincipal` on `SecurityContext`. Does NOT throw on invalid token — lets Spring Security return 401.
 
-## Git Conventions
+## Password
+BCrypt via `BCryptPasswordEncoder`, cost factor 10.
+Requirements: 8–72 chars, ≥1 uppercase, ≥1 lowercase, ≥1 digit, ≥1 special char.
+Regex: `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:',.<>?/~` + "`" + `]).{8,72}$`
 
-Branch naming: `feature/auth-login`, `fix/token-refresh-loop`, `chore/update-deps`
+## Account Locking
+Check `login_attempts` table: count rows where `email = ?` AND `success = false` AND `attempted_at > NOW() - INTERVAL '15 minutes'`.
+If count >= 5, return 423 with `lockedUntil` timestamp.
+Insert a `success = true` row on successful login (resets the counter naturally).
 
-Commits (conventional format):
-```
-feat(tasks): add drag-and-drop status update
-fix(auth): prevent token refresh race condition
-test(comments): add delete comment integration test
-```
+## Testing Structure
+- Service tests: Mockito, test business logic in isolation
+- Controller tests: `@WebMvcTest` with mocked services, test HTTP behavior (status codes, request validation, response shapes)
+- Repository tests: `@DataJpaTest` with Testcontainers, test custom queries
+- Integration tests: `@SpringBootTest` with Testcontainers, test full request → response flow
+
+Test files mirror source structure under `src/test/java/haonguyen/taskflow_be/`.
+
+## Git
+Branch naming: `feature/auth-login`, `feature/kanban-board`, `fix/token-refresh-loop`, `chore/update-deps`.
+Commit messages: conventional commits — `feat(tasks): add drag-and-drop status update`, `fix(auth): prevent token refresh race condition`.

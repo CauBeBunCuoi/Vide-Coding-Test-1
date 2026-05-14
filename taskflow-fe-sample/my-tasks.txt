@@ -1,0 +1,138 @@
+TEAMMATE A — FRONTEND DEVELOPER
+My Tasks and Responsibilities
+
+SCOPE
+I own the user interface and client-side experience. This includes React components, styling, state management,
+routing, and all interactions users see in the browser. I do NOT touch backend APIs, databases, or infrastructure.
+
+TECH STACK
+- React 19 with TypeScript 5 (strict mode)
+- Vite 6 for build/dev, Tailwind CSS 4 for styling (no custom CSS files)
+- shadcn/ui components as base primitives
+- React Router 7 for navigation
+- TanStack Query 5 for server state and caching
+- Zustand 5 for client state (auth, app-level state)
+- Axios for HTTP with interceptors for auth token refresh and error handling
+- React Hook Form + Zod for form validation
+- @dnd-kit for drag-and-drop interactions
+
+KEY RESPONSIBILITIES
+
+1. BUILD COMPONENTS
+   - Create reusable React components in src/components/
+   - Follow PascalCase naming (TaskCard.tsx, KanbanBoard.tsx)
+   - Use Tailwind utilities only for styling (no CSS files)
+   - Implement all shared UI components (Button, Input, Modal, SlideOver, Toast, Avatar, Badge, etc.)
+   - Add variant support (sizes, colors, states) for each component
+
+2. MANAGE STATE
+   - Auth state lives in Zustand authStore (memory only, never localStorage)
+   - Feature-level state via Zustand stores in src/stores/
+   - Server state via TanStack Query hooks (useQuery, useMutation)
+   - Query keys follow array format: ['tasks', projectId, filters]
+
+3. HANDLE AUTHENTICATION
+   - Implement protected routes that redirect to /login when not authenticated
+   - Implement public-only routes that redirect to / when already authenticated
+   - Ensure Axios interceptor attaches Bearer token and handles 401 refresh logic
+   - Queue concurrent 401 requests to prevent multiple simultaneous refresh calls
+   - Show error toasts for network failures
+
+4. BUILD API LAYER
+   - Create typed fetch functions in src/api/ (one file per resource)
+   - Export plain async functions that return typed responses
+   - Never call API functions directly from components — always wrap in TanStack Query hooks
+   - Handle 403 (forbidden), 404 (not found), and other errors with proper query retry logic
+
+5. IMPLEMENT QUERIES AND MUTATIONS
+   - Build query hooks that fetch and cache server data
+   - Build mutation hooks that update server data
+   - Implement optimistic updates for drag-and-drop and inline field edits
+   - On mutation error, restore previous state from snapshot
+   - Use onSettled to invalidate queries and refetch fresh data
+
+6. BUILD FORMS
+   - Use React Hook Form integrated with Zod for validation
+   - Validate text fields on blur (debounced)
+   - Validate selects and dates immediately on change
+   - Show field-level errors inline
+   - Remember: frontend validation is advisory; backend is authoritative
+
+7. HANDLE ERRORS
+   - Show inline error messages with "Try again" button for failed queries
+   - Render ForbiddenPage for 403, NotFoundPage for 404
+   - Use toast notifications for discrete errors (create, delete)
+   - Show validation errors inline in forms
+   - Never use dangerouslySetInnerHTML
+
+8. IMPLEMENT AUTO-SAVE (Task Detail)
+   - Text fields save on blur, debounced 500ms
+   - Select and date fields save immediately on change
+   - Show "Saving…" indicator → "Saved" for 2 seconds
+   - Use toasts only for discrete actions (create, delete), not for inline saves
+
+9. MANAGE FILTER STATE
+   - Store active filters in URL query parameters for bookmarking and sharing
+   - Sync sort state to URL params (e.g. ?sort=deadline,asc)
+   - Update URL when filters change, update state when URL changes
+
+10. IMPLEMENT VIEWS AND PAGES
+    - Create page files in src/pages/ (one file per route)
+    - Implement Kanban board view with drag-and-drop status updates
+    - Implement list view with sorting and filtering
+    - Render loading states with Skeleton components
+    - Render empty states with EmptyState component + optional CTA
+    - Render error states with inline message + "Try again" button
+
+11. STYLE AND LAYOUT
+    - Use only Tailwind utilities (use cn() helper for conditional classes)
+    - Max content width: 1280px, centered with 24px padding (16px mobile)
+    - App shell: fixed top navbar (56px) + scrollable page content
+    - Responsive: desktop ≥1024px, tablet 768–1023px, mobile <768px
+    - Use CSS custom properties for design tokens (no hardcoded hex values)
+
+12. IMPLEMENT ACCESSIBILITY
+    - Make all interactive elements reachable via Tab key
+    - Trap focus in modals and slide-over panels
+    - Close overlays on Escape key
+    - Use semantic HTML and proper ARIA labels
+
+13. HANDLE LOADING, EMPTY, ERROR STATES
+    - Every data-fetching view must implement all three states
+    - Loading: show Skeleton components matching content shape
+    - Empty: show EmptyState with icon, message, and optional CTA
+    - Error: inline message with "Try again" button calling refetch()
+
+14. MARKDOWN RENDERING
+    - Render task descriptions and comments using react-markdown only
+    - Never render user input as HTML (use text nodes)
+
+15. FOLLOW CONVENTIONS
+    - Hook naming: camelCase with 'use' prefix (useTasks.ts)
+    - Utility naming: camelCase (formatDate.ts)
+    - Type naming: PascalCase (Task, CreateTaskRequest)
+    - Event handler naming: 'handle' + event (handleSubmit, handleDragEnd)
+    - Boolean naming: 'is/has/can' prefix (isLoading, hasMore, canDelete)
+    - Branch naming: feature/*, fix/*, chore/* format
+    - Commits: conventional commits (feat(board): add drag-and-drop)
+
+16. GIT AND TESTING
+    - Run frontend: npm run dev (http://localhost:5173)
+    - Unit/component tests: npm run test (Vitest)
+    - E2E tests: npx playwright test (requires full stack)
+
+ROUTES I WILL BUILD
+/login — login form, redirect to / if already authenticated
+/register — registration form, redirect to / if already authenticated
+/ — dashboard with project list
+/projects/:id — Kanban board with drag-and-drop, view toggle (Kanban/List)
+/projects/:id/settings — project settings
+/profile — user profile/settings
+
+NOT MY RESPONSIBILITY
+- Backend API implementation
+- Database schema or migrations
+- Authentication token generation or validation
+- Background jobs
+- Infrastructure or deployment
+- Test writing (that is Teammate C's role)

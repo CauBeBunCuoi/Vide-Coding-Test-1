@@ -1,0 +1,18 @@
+# .worktreeinclude
+# Chỉ copy các file gitignored mà agent cần để chạy dev server
+
+# Gitignored files
+**/.env.dev
+**/.env.prod
+
+# Backend env files
+taskflow-be-sample/.env.dev
+taskflow-be-sample/.env.prod
+taskflow-be/.env.dev
+taskflow-be/.env.prod
+
+# Frontend env files  
+taskflow-fe-sample/.env.dev
+taskflow-fe-sample/.env.prod
+taskflow-fe/.env.dev
+taskflow-fe/.env.prod

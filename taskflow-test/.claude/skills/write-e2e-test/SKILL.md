@@ -11,6 +11,10 @@ description: How to write an end-to-end test in this project
 4. Clean up seeded data in `afterEach` using `teardown()` helper
 5. Assert both the response status and the response body shape
 6. Check `.claude/rules/conventions.md` for naming and file structure conventions
-7. Add the scenario to `.claude/context/test-scope.md` if it covers a new flow
+7. Add the scenario to `references/test-scope.md` if it covers a new flow
 
-> **Template note:** `conventions.md` and `test-scope.md` above are example names. Your project's files may be named differently — check what exists in `.claude/rules/` and `.claude/context/` and reference the correct files.
+## References
+- `references/test-scope.md` — what is in/out of scope and current coverage targets
+- `.claude/rules/conventions.md` — test naming and file structure conventions
+
+> **Template note:** Rule file names above are examples. Check what exists in `.claude/rules/` and reference the correct files.

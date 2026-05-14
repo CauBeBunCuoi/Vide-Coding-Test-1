@@ -11,7 +11,13 @@ description: How to add a new REST endpoint in this project
 4. Add DB queries in `src/repositories/<resource>.repository.ts`
 5. Define request/response types in `src/types/<resource>.types.ts`
 6. Write a migration if schema changes — see `.claude/rules/database.md`
-7. Add endpoint to `.claude/context/api-list.md`
+7. Add the new endpoint to `references/api-list.md`
 8. Check `.claude/rules/api.md` for naming and response format conventions
 
-> **Template note:** `database.md`, `api-list.md`, and `api.md` above are example names. Your project's files may be named differently — check what exists in `.claude/rules/` and `.claude/context/` and reference the correct files.
+## References
+- `references/api-list.md` — current list of all endpoints
+- `references/background-jobs.md` — background jobs that may be affected by schema changes
+- `.claude/rules/api.md` — API naming and response format conventions
+- `.claude/rules/database.md` — migration standards
+
+> **Template note:** Rule file names above are examples. Check what exists in `.claude/rules/` and reference the correct files.

@@ -1,98 +1,68 @@
-# Test Conventions — TaskFlow
+# Test Conventions
 
-## Test Types & Tools
+## Naming
 
-| Type | Tool | Scope |
-|------|------|-------|
-| Backend unit | JUnit 5 + Mockito | Service methods with mocked repositories |
-| Backend controller | JUnit 5 + `@WebMvcTest` | HTTP status, request validation, response shape |
-| Backend repository | JUnit 5 + `@DataJpaTest` + Testcontainers | Custom JPQL queries against real PostgreSQL |
-| Backend integration | JUnit 5 + `@SpringBootTest` + Testcontainers | Full request → DB → response flow |
-| Frontend component | Vitest + React Testing Library | Render, user interaction, DOM assertions |
-| Frontend hooks | Vitest + `renderHook` | Custom hook behavior in isolation |
-| E2E | Playwright | Full browser tests against running stack |
+| Test type | File pattern | Example |
+|-----------|-------------|---------|
+| JUnit service unit | `*ServiceTest.java` | `TaskServiceTest.java` |
+| JUnit controller | `*ControllerTest.java` | `TaskControllerTest.java` |
+| JUnit repository | `*RepositoryTest.java` | `TaskRepositoryTest.java` |
+| JUnit integration | `*IntegrationTest.java` | `CreateTaskIntegrationTest.java` |
+| Vitest component | `*.test.tsx` co-located with source | `TaskCard.test.tsx` |
+| Playwright E2E | `*.spec.ts` in `tests/` | `auth.spec.ts`, `kanban.spec.ts` |
 
-## Backend Test File Location
+Method names: `should_<result>_when_<condition>` (JUnit), `renders <what> when <condition>` (Vitest), `user can <action>` (Playwright).
 
-Mirror source structure under `src/test/java/com/example/demo/`:
+## Backend Test Structure
+
+Mirror source structure under `src/test/java/haonguyen/taskflow_be/`:
 ```
-service/TaskServiceTest.java          ← unit test
-controller/TaskControllerTest.java    ← @WebMvcTest
-repository/TaskRepositoryTest.java    ← @DataJpaTest
-integration/TaskIntegrationTest.java  ← @SpringBootTest
-```
-
-## Backend Test Types in Detail
-
-**Service unit tests (`service/`):**
-- Mock all repositories with `@Mock` / `Mockito.mock()`
-- Test happy path + all error branches (permission denied, not found, business rule violations)
-- Do not test persistence — that belongs in repository tests
-
-**Controller tests (`controller/`):**
-- `@WebMvcTest` with `@MockBean` service
-- Test: correct HTTP status code, request validation rejection (400 on bad input), response body shape
-- Do not test business logic
-
-**Repository tests (`repository/`):**
-- `@DataJpaTest` + Testcontainers (real PostgreSQL — not H2)
-- Test custom `@Query` methods and non-trivial derived queries
-- Flyway migrations + seed data run automatically
-
-**Integration tests (`integration/`):**
-- `@SpringBootTest` + Testcontainers
-- Full request → service → DB → response
-- Use seed data (alex_lead/Test1234!, sam_dev/Test1234!, jordan_free/Test1234!)
-
-**Never mock the database in repository or integration tests.**
-
-## Backend Test Commands
-
-```bash
-./gradlew test                                                    # All tests
-./gradlew test --tests "com.example.demo.service.TaskServiceTest" # Single class
-./gradlew test --tests "com.example.demo.service.*"              # Package
-./gradlew test --info                                             # Verbose output
+src/test/java/haonguyen/taskflow_be/
+├── service/        ← Mockito unit tests (no Spring context)
+├── controller/     ← @WebMvcTest (Spring MVC slice, mock service)
+├── repository/     ← @DataJpaTest + Testcontainers
+└── integration/    ← @SpringBootTest + Testcontainers (full stack)
 ```
 
-Requires Docker running (Testcontainers spins up PostgreSQL automatically).
+## Database in Tests
 
-## Frontend Test File Location
+**Never mock the database** in repository or integration tests. Always use Testcontainers with a real PostgreSQL image. `@DataJpaTest` and `@SpringBootTest` tests must use `@Testcontainers` + `@Container` with `PostgreSQLContainer`.
 
-Co-locate component tests next to the component:
+Mocking is only allowed in service-layer tests (`@ExtendWith(MockitoExtension.class)`).
+
+## Coverage Targets
+
+| Layer | Required coverage |
+|---|---|
+| Service | Every happy path + every error/exception branch |
+| Controller | Every endpoint: correct status code + response shape |
+| Repository | All custom `@Query` methods |
+| Integration | All P0 features (auth, projects, tasks, labels, comments) |
+| E2E (Playwright) | Auth flow, create project, create task, drag-and-drop status change |
+
+## Frontend Test Patterns
+
+Vitest + React Testing Library: co-locate test files with source (`src/features/<area>/<Component>.test.tsx`).
+- Test rendered output and user interactions, not implementation details
+- Use `userEvent` over `fireEvent`
+- Mock API functions in `src/api/` with `vi.mock()`
+- Do not mock TanStack Query internals — wrap components in `QueryClientProvider` with a real `QueryClient`
+
+## Playwright E2E
+
+Tests live in `tests/` at the frontend root (`taskflow-fe-sample/tests/`).
+Seed accounts for all E2E tests (password `Test1234!`): alex@example.com, sam@example.com, jordan@example.com.
+Both backend (`localhost:8080`) and frontend (`localhost:5173`) must be running before E2E tests start.
+
+## Test Run Commands
+
 ```
-src/features/board/
-├── KanbanBoard.tsx
-├── KanbanBoard.test.tsx   ← Vitest + RTL
-├── TaskCard.tsx
-└── TaskCard.test.tsx
+# Backend (from taskflow-be-sample/)
+./gradlew test                  # requires Docker
+
+# Frontend unit/component (from taskflow-fe-sample/)
+npm run test
+
+# Frontend E2E (from taskflow-fe-sample/, full stack must be running)
+npx playwright test
 ```
-
-E2E tests in top-level `tests/`:
-```
-tests/
-├── auth.spec.ts
-├── projects.spec.ts
-├── tasks.spec.ts
-└── comments.spec.ts
-```
-
-## Frontend Test Commands
-
-```bash
-npm run test                              # Vitest (watch mode off)
-npm run test:watch                        # Watch mode
-npm run test:coverage                     # Coverage report
-npx playwright test                       # E2E (full stack must be running)
-npx playwright test --headed              # Headed mode (see browser)
-npx playwright test tests/auth.spec.ts   # Specific file
-```
-
-## General Rules
-
-- **Never mock the database** in repository or integration tests — use Testcontainers
-- **Do not retry mutations** in tests — retrying risks duplicate writes
-- **Queries retry up to 3 times** with backoff; configure `retry: false` for 403/404 tests
-- Every new service method needs a unit test
-- Every new API endpoint needs a controller test
-- Every new E2E test scenario should be added to `.claude/context/test-scope.md`

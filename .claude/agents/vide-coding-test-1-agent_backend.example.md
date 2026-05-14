@@ -3,6 +3,7 @@ name: backend-developer
 description: Handles REST API design, database schema, migrations, authentication, and business logic. Use for anything server-side.
 tools: Read, Edit, Write, Bash, Glob, Grep
 model: haiku
+isolation: worktree
 ---
 
 # ROLE: Teammate B — Backend Developer

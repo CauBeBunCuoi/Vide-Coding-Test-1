@@ -3,6 +3,7 @@ name: frontend-developer
 description: Handles UI components, styling, responsive design, and client-side interactions. Use for anything the user sees in the browser.
 tools: Read, Edit, Write, Bash, Glob, Grep
 model: haiku
+isolation: worktree
 ---
 
 # ROLE: Teammate A — Frontend Developer

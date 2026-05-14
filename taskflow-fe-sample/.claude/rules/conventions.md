@@ -1,93 +1,92 @@
-# Frontend Conventions — TaskFlow
+# Frontend Conventions
 
-## Tech Stack
-
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Language | TypeScript | 5.x (strict mode) |
-| Framework | React | 19.x |
-| Build | Vite | 6.x |
-| Styling | Tailwind CSS | 4.x |
-| Components | shadcn/ui (Radix primitives) | — |
-| Routing | React Router | 7.x |
-| Server state | TanStack Query (React Query) | 5.x |
-| Client state | Zustand | 5.x |
-| HTTP | Axios | — |
-| Forms | React Hook Form + Zod | — |
-| Drag-and-drop | @dnd-kit/core + @dnd-kit/sortable | — |
-| Markdown | react-markdown | — |
-| Dates | date-fns | — |
-| Icons | Lucide React | — |
-| Testing | Vitest + React Testing Library + Playwright | — |
-
-## Project Structure
-
-```
-src/
-├── api/            auth.ts, users.ts, projects.ts, tasks.ts, labels.ts, taskLabels.ts, comments.ts, members.ts
-│   └── client.ts   Axios instance with auth + refresh interceptors
-├── components/     Avatar, Badge, LabelPill, EmptyState, ConfirmDialog, Toast, Pagination, Skeleton
-│   └── ui/         shadcn/ui base components (Button, Input, Select, DatePicker, Modal, SlideOver, ...)
-├── features/       auth/, projects/, board/, tasks/, comments/, members/, labels/, settings/
-├── hooks/          useDebounce.ts, useClickOutside.ts, useKeyboard.ts
-├── layouts/        AppLayout.tsx, AuthLayout.tsx, Navbar.tsx
-├── pages/          LoginPage, RegisterPage, DashboardPage, ProjectPage, ProjectSettingsPage, ProfilePage, NotFoundPage, ForbiddenPage
-├── stores/         authStore.ts (Zustand)
-├── types/          api.ts, enums.ts, pagination.ts
-└── utils/          cn.ts, formatDate.ts, avatarColor.ts
-```
-
-E2E tests: top-level `tests/` directory.
-
-## Naming Conventions
-
+## Naming
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Components | PascalCase `.tsx` | `TaskCard.tsx`, `KanbanBoard.tsx` |
-| Hooks | camelCase, `use` prefix | `useTasks.ts`, `useDebounce.ts` |
+| Components | PascalCase | `TaskCard.tsx`, `KanbanBoard.tsx` |
+| Hooks | camelCase with `use` prefix | `useTasks.ts`, `useDebounce.ts` |
 | Utilities | camelCase | `formatDate.ts`, `cn.ts` |
 | Types/Interfaces | PascalCase | `Task`, `CreateTaskRequest` |
-| Enum-like constants | SCREAMING_SNAKE in const object | `TaskStatus.IN_PROGRESS` |
-| API functions | camelCase verb+noun | `createTask`, `fetchTasks` |
-| Props interfaces | ComponentName + Props | `TaskCardProps`, `FilterBarProps` |
+| Enum-like constants | const object, SCREAMING_SNAKE values | `TaskStatus.IN_PROGRESS` |
+| API functions | camelCase verb+noun | `createTask`, `fetchTasks`, `updateTask` |
+| CSS classes | Tailwind utilities only (no custom CSS files) | `className="flex items-center gap-2"` |
+| Props interfaces | Component name + `Props` | `TaskCardProps`, `FilterBarProps` |
 | Query keys | `[resource, ...params]` array | `['tasks', projectId, filters]` |
-| Store slices | camelCase noun | `authStore` |
 | Event handlers | `handle` + event | `handleSubmit`, `handleDragEnd` |
 | Boolean props/state | `is`/`has`/`can` prefix | `isLoading`, `hasMore`, `canDelete` |
 
-## Styling Rules
+## Auth Flow
+- Access token in Zustand `authStore` (memory only — never localStorage or sessionStorage).
+- Refresh token is httpOnly cookie — JavaScript cannot access it.
+- Axios request interceptor attaches `Authorization: Bearer <token>`.
+- Axios response interceptor on 401: attempt token refresh → retry original request. If refresh fails, clear auth state and redirect to `/login`.
+- Concurrent 401s: queue all failed requests, execute one refresh, drain queue on success or reject all on failure.
+- `ProtectedRoute` component: redirects to `/login` when not authenticated.
+- `PublicOnlyRoute` component: redirects to `/` when already authenticated.
 
-- **Tailwind utilities only** — no CSS files, no CSS modules, no inline style objects
-- Use `cn()` (clsx + tailwind-merge) for conditional class merging
-- Color tokens: CSS custom properties (`--color-primary: #2563EB`, `--color-danger: #DC2626`, etc.)
-- Priority badge colors: URGENT (#FEE2E2/#991B1B), HIGH (#FEF3C7/#92400E), MEDIUM (#DBEAFE/#1E40AF), LOW (#F3F4F6/#374151)
-- Font stack: `Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+## API Layer
+Each resource file in `src/api/` exports plain async functions returning typed responses.
+These are consumed by TanStack Query hooks in feature folders, never called directly from components.
 
-## TypeScript Rules
+## Query Hooks Pattern
+```typescript
+// useQuery
+export function useTasks(projectId: number, filters: TaskFilters) {
+  return useQuery({
+    queryKey: ['tasks', projectId, filters],
+    queryFn: () => fetchTasks(projectId, filters),
+    retry: (failureCount, error) => {
+      const status = error.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failureCount < 3;
+    },
+  });
+}
 
-- Strict mode (`"strict": true` in tsconfig)
-- No `any` — use `unknown` and narrow
-- All component props must have explicit interface (`ComponentNameProps`)
-- API response types defined in `src/types/api.ts`
-
-## Git Conventions
-
-Branch naming: `feature/auth-login`, `fix/token-refresh-loop`, `chore/update-deps`
-
-Commits (conventional format):
+// useMutation with optimistic update
+export function useUpdateTask(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, data }) => updateTask(taskId, data),
+    onMutate: async ({ taskId, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', projectId] });
+      const previousData = queryClient.getQueryData(['tasks', projectId]);
+      queryClient.setQueryData(['tasks', projectId], /* optimistic update */);
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['tasks', projectId], context?.previousData);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+    },
+  });
+}
 ```
-feat(board): add drag-and-drop status update
-fix(auth): prevent token refresh race condition
-test(comments): add delete comment e2e test
-```
 
-## Dev Commands
+## Validation
+Use Zod schemas mirroring backend constraints. React Hook Form integrates via `@hookform/resolvers/zod`.
+Validate on blur for text fields, on change for selects.
+Frontend validation is advisory — backend is authoritative.
 
-```bash
-npm run dev                   # http://localhost:5173
-npx tsc --noEmit              # Type check
-npm run lint                  # Lint
-npm run test                  # Vitest unit/component
-npm run test:coverage         # Coverage
-npx playwright test           # E2E (requires backend + frontend running)
-```
+## Error Handling
+- Axios interceptor shows `toast.error()` for network errors (no `error.response`).
+- Mutation `onError`: switch on `apiError?.error` code to show inline field errors or toasts.
+- Query `isError`: 403 → show `ForbiddenPage`, 404 → show `NotFoundPage`, others → inline error + "Try again" button.
+- Never use `dangerouslySetInnerHTML`.
+- Markdown (task descriptions, comments): render via `react-markdown` only.
+- User text in non-markdown contexts: rendered as text nodes, never HTML.
+
+## Auto-Save (Task Detail Panel)
+- Text fields (title, description): save on blur, debounced 500ms.
+- Select/date fields: save immediately on change.
+- Show "Saving…" indicator near top of panel → "Saved" for 2 seconds.
+- Auto-save uses toasts only for discrete actions (create, delete), NOT for inline field saves.
+
+## Filter State in URL
+Active filters are preserved in URL query parameters so they can be shared and bookmarked.
+Sort state is also synced to URL params (e.g. `?sort=deadline,asc`).
+
+## Git
+Branch naming: `feature/kanban-board`, `fix/token-refresh-loop`, `chore/update-deps`.
+Commit messages: conventional commits — `feat(board): add drag-and-drop status update`.

@@ -5,7 +5,7 @@
 Verify these tools are installed before starting:
 
 ```bash
-java --version          # Java 24.0.2+
+java --version          # Java 21+
 gradle --version        # Gradle 8.14+
 node --version          # Node 20+
 npm --version           # npm 10+
