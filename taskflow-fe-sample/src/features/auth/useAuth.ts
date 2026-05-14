@@ -12,7 +12,6 @@ export function useLogin() {
   return useMutation({
     mutationFn: async (data: { email: string; password: string }) => {
       const tokenData = await login(data)
-      // Fetch user with token directly — don't rely on store interceptor yet
       const user = await client
         .get<UserResponse>('/users/me', {
           headers: { Authorization: `Bearer ${tokenData.accessToken}` },
@@ -29,20 +28,25 @@ export function useLogin() {
 
 export function useRegister() {
   const navigate = useNavigate()
-  const loginMutation = useLogin()
+  const { setAuth } = useAuthStore()
 
   return useMutation({
     mutationFn: async (data: { username: string; email: string; password: string }) => {
       await register(data)
-      return data
+      const tokenData = await login({ email: data.email, password: data.password })
+      const user = await client
+        .get<UserResponse>('/users/me', {
+          headers: { Authorization: `Bearer ${tokenData.accessToken}` },
+        })
+        .then((r) => r.data)
+      return { tokenData, user }
     },
-    onSuccess: (data) => {
-      loginMutation.mutate(
-        { email: data.email, password: data.password },
-        {
-          onError: () => navigate('/login?registered=true'),
-        },
-      )
+    onSuccess: ({ tokenData, user }) => {
+      setAuth(tokenData.accessToken, user)
+      navigate('/')
+    },
+    onError: () => {
+      navigate('/login?registered=true')
     },
   })
 }

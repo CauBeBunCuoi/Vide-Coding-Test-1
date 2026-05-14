@@ -17,11 +17,3 @@ export interface TokenResponse {
   accessToken: string
   expiresIn: number
 }
-
-export interface User {}
-export interface Project {}
-export interface ProjectDetail {}
-export interface ProjectMember {}
-export interface Task {}
-export interface Label {}
-export interface Comment {}
