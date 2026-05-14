@@ -1,4 +1,11 @@
 package haonguyen.taskflow_be.repository;
 
-public interface UserRepository {
+import haonguyen.taskflow_be.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByEmailIgnoreCase(String email);
+    boolean existsByUsernameIgnoreCase(String username);
+    boolean existsByEmailIgnoreCase(String email);
 }
