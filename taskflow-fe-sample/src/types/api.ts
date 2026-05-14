@@ -6,6 +6,18 @@ export interface ApiError {
   }
 }
 
+export interface UserResponse {
+  id: number
+  username: string
+  email: string
+  createdAt: string
+}
+
+export interface TokenResponse {
+  accessToken: string
+  expiresIn: number
+}
+
 export interface User {}
 export interface Project {}
 export interface ProjectDetail {}
