@@ -57,7 +57,10 @@ The template provides a **root orchestrator + 3 specialist agent teammates** (Fr
 │   │   └── 08-error-handling-and-edge-cases.md
 │   │
 │   └── rules/                             # Root-level coordination rules (team-wide, not project-specific)
-│       └── vibe-template-structure.md     # This file
+│       ├── coordination/   
+|       │   └── git-workflow.md            # Rules for how teammates coordinate via git (commits, branches, worktrees)
+│       └── setup/
+|           └── vibe-template-structure.md # This file: explains the Vibe template structure and conventions
 │
 ├── taskflow-fe/                           # Frontend teammate workspace
 │   ├── CLAUDE.md                          # Imports rules; has ## Project Context section
