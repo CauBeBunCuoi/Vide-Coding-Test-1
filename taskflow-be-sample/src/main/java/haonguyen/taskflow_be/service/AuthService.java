@@ -4,7 +4,6 @@ import haonguyen.taskflow_be.dto.request.LoginRequest;
 import haonguyen.taskflow_be.dto.request.RegisterRequest;
 import haonguyen.taskflow_be.dto.response.TokenResponse;
 import haonguyen.taskflow_be.dto.response.UserResponse;
-import haonguyen.taskflow_be.entity.LoginAttempt;
 import haonguyen.taskflow_be.entity.RefreshToken;
 import haonguyen.taskflow_be.entity.User;
 import haonguyen.taskflow_be.exception.AccountLockedException;
@@ -44,6 +43,7 @@ public class AuthService {
     private final LoginAttemptRepository loginAttemptRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final LoginAttemptService loginAttemptService;
     private final long refreshTokenExpiration;
 
     public AuthService(
@@ -52,12 +52,14 @@ public class AuthService {
             LoginAttemptRepository loginAttemptRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
+            LoginAttemptService loginAttemptService,
             @Value("${jwt.refresh-token-expiration}") long refreshTokenExpiration) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.loginAttemptRepository = loginAttemptRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.loginAttemptService = loginAttemptService;
         this.refreshTokenExpiration = refreshTokenExpiration;
     }
 
@@ -79,14 +81,14 @@ public class AuthService {
         var since = Instant.now().minus(LOCK_WINDOW_MINUTES, ChronoUnit.MINUTES);
         long failedCount = loginAttemptRepository.countFailedAttempts(request.email(), since);
         if (failedCount >= MAX_FAILED_ATTEMPTS) {
-            throw new AccountLockedException(since.plus(LOCK_WINDOW_MINUTES, ChronoUnit.MINUTES));
+            throw new AccountLockedException(Instant.now().plus(LOCK_WINDOW_MINUTES, ChronoUnit.MINUTES));
         }
 
         var userOpt = userRepository.findByEmailIgnoreCase(request.email());
         boolean success = userOpt.isPresent()
                 && passwordEncoder.matches(request.password(), userOpt.get().getPassword());
 
-        recordAttempt(request.email(), success);
+        loginAttemptService.recordAttempt(request.email(), success);
 
         if (!success) {
             throw new BusinessRuleException("INVALID_CREDENTIALS", "Invalid email or password");
@@ -128,14 +130,7 @@ public class AuthService {
         rt.setExpiresAt(Instant.now().plusMillis(refreshTokenExpiration));
         refreshTokenRepository.save(rt);
 
-        return new AuthResult(new TokenResponse(accessToken, 900000L), rawRefresh);
-    }
-
-    private void recordAttempt(String email, boolean success) {
-        var attempt = new LoginAttempt();
-        attempt.setEmail(email.toLowerCase());
-        attempt.setSuccess(success);
-        loginAttemptRepository.save(attempt);
+        return new AuthResult(new TokenResponse(accessToken, jwtTokenProvider.getAccessTokenExpiration()), rawRefresh);
     }
 
     private String generateRawToken() {

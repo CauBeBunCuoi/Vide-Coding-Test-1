@@ -30,6 +30,7 @@ class AuthServiceTest {
     @Mock RefreshTokenRepository refreshTokenRepository;
     @Mock LoginAttemptRepository loginAttemptRepository;
     @Mock JwtTokenProvider jwtTokenProvider;
+    @Mock LoginAttemptService loginAttemptService;
 
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4); // low cost for tests
     AuthService authService;
@@ -38,7 +39,7 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, loginAttemptRepository,
-                passwordEncoder, jwtTokenProvider, 604800000L);
+                passwordEncoder, jwtTokenProvider, loginAttemptService, 604800000L);
     }
 
     // ── register ─────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ class AuthServiceTest {
         when(loginAttemptRepository.countFailedAttempts(anyString(), any(Instant.class))).thenReturn(0L);
         when(userRepository.findByEmailIgnoreCase("alex@example.com")).thenReturn(Optional.of(user));
         when(jwtTokenProvider.generateAccessToken(any())).thenReturn("access-token-123");
+        when(jwtTokenProvider.getAccessTokenExpiration()).thenReturn(900000L);
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = authService.login(new LoginRequest("alex@example.com", "Test1234!"));

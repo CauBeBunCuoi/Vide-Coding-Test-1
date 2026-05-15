@@ -20,6 +20,8 @@ public class JwtTokenProvider {
         this.accessTokenExpiration = accessTokenExpiration;
     }
 
+    public long getAccessTokenExpiration() { return accessTokenExpiration; }
+
     public String generateAccessToken(UserPrincipal principal) {
         var now = new Date();
         return Jwts.builder()
